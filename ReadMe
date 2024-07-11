@@ -1,5 +1,19 @@
-Submitted by:
-Pallavi Varshney
-2019h1030029G
+# Earliest Deadline First (EDF) Algorithm Implementation
 
-To execute the programe type make in the terminal with pwd set as location of the program.
+This project is an implementation of the Earliest Deadline First (EDF) scheduling algorithm, based on the research paper available at the following IEEE link.
+
+## About the EDF Algorithm
+
+The Earliest Deadline First (EDF) algorithm is a dynamic priority scheduling algorithm used in real-time systems. It assigns priorities to tasks according to their absolute deadlines. The task with the closest deadline gets the highest priority.
+
+## About the Research Paper
+
+The research paper focuses on real-time scheduling of mixed-criticality systems. In these systems, low-criticality tasks are still guaranteed some service in the high-criticality mode, but with reduced execution budgets. The paper presents a utilization-based schedulability test for such systems under EDF-VD scheduling.
+
+The paper also quantifies the suboptimality of EDF-VD in terms of speedup factors. The speedup factor is a function with respect to the ratio between the amount of resource required by different types of tasks in different criticality modes, and reaches 4/3 in the worst case.
+
+The proposed utilization-based schedulability test and speedup factor results apply to the elastic mixed-criticality model as well. Experiments show the effectiveness of the proposed method and confirm the theoretical suboptimality results.
+
+## Project Implementation
+
+This project implements the EDF algorithm based on the findings and methodologies presented in the research paper. It aims to provide a practical application of the theoretical concepts discussed in the paper.
