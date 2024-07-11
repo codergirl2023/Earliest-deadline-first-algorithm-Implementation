@@ -1,0 +1,217 @@
+#include"Header.h"
+
+vector<tasks> read_file() {
+	int i;
+	char s[80];
+    int ntsks;
+	char file_name[80];
+	FILE* f;
+	cout << "Enter file name\n";
+	cin >> file_name;
+	f = fopen(file_name, "r");
+	
+	if (f == NULL) {
+		printf("Error opening file\n");
+		exit(0);
+	}
+	fgets(s, 79, f);
+	ntsks = (int)(*s-48);
+	//cout << "ntasks" << *s<<" "<<ntsks<< endl;
+	cout << "+++++++++++++++++++++++++++++BELOW IS THE TASK SET++++++++++++++++++++++++++++++++" << endl;
+	cout << "A.T T.P.  Critical\t\tWCETLOW\t\tWCETHI " << endl;
+	vector<tasks> j(ntsks);
+	for (i = 0; i < ntsks; i++) {
+		j[i].id = i;
+		fscanf(f, "%d %d %d %d %d %d", &j[i].arr_time, &j[i].criticality, &j[i].period, &j[i].wcet[0], &j[i].wcet[1],&j[i].deadline);
+		cout << j[i].arr_time << "   " << j[i].period<<"\t\t"<<j[i].criticality << "\t\t" << j[i].wcet[0] << " \t\t" << j[i].wcet[1] << endl;
+		j[i].vir_deadline = j[i].deadline;
+	}
+	fclose(f);
+	return j;
+}
+
+float calc_util(vector<float> &vec,int ntasks,vector<tasks> j) {
+	int i;
+	float x;
+	vec.assign(3*sizeof(int),0);
+	for (i = 0; i < ntasks; i++) {
+		if (j[i].criticality == 1)
+			vec[0] += j[i].wcet[0] / j[i].period;
+		if (j[i].criticality == 2) {
+			vec[1] += j[i].wcet[1] / j[i].period;	
+			vec[2] += j[i].wcet[0] / j[i].period;
+		}
+	}
+	x = vec[2] / (1 - vec[0]);
+	//check two other paramerters for schedulability test
+	if ((x * vec[0] + vec[1] > 1) || vec[0]>1 || vec[1]>1) {
+		printf("\nUnfortunately...Task set is un-schedulable\n");
+		exit(0);
+	}
+	else
+		printf("\nCongratulations!!! Task set is schedulable\n");
+	return x;
+}
+
+void preProcePhase(float x,int ntasks,vector<tasks> j) {
+	for (int i = 0; i < ntasks; i++) {
+		if (j[i].criticality == 2)
+			j[i].vir_deadline/= x;
+	}
+}
+
+int gcd(int a, int b) {
+	if (a == b)     return a;
+	else if (a > b) return gcd(a - b, b);
+	else 	       return gcd(a, b - a);
+}
+
+int calcHyperPeriod(vector<tasks> j) {
+	int hcf, lcm, a, b;
+	lcm = j[0].period;
+	for (int i = 1; i < j.size(); i++) {
+		a = lcm;
+		b = j[i].period;
+		hcf = gcd(a, b);
+		lcm = (a * b) / hcf;
+	}
+	printf("Hyperperiod=%d\n", lcm);
+	return lcm;
+}
+
+int checkCriticality(jobs t,vector<tasks> j,int n) {
+	int i;
+	for (i = 0; i < j.size(); i++) {
+		if (j[i].id == t.id && j[i].criticality==2) 
+			return i;
+	}
+	return -1;
+}
+
+void addNewJob(jobs tar,vector<jobs>&wq,int *timer, vector<tasks> j) {
+	int arr_time, i,abs_deadline;
+	for (i = 0; i < j.size(); i++) {
+		if (j[i].id == tar.id)
+			break;
+	}
+	//cout << "id=" << j[i].id<<endl;
+	arr_time = tar.arr_time + ceil(*timer/(float)j[i].period)*j[i].period;
+		if (j[i].criticality == 1) {
+			abs_deadline = arr_time + j[i].deadline;
+			wq.push_back({ abs_deadline,tar.id,tar.rem_ET,arr_time });
+		}
+		else {
+			abs_deadline = arr_time + j[i].vir_deadline;
+			wq.push_back({ abs_deadline,tar.id,tar.rem_ET,arr_time });
+		}
+}
+
+void schedule(vector<tasks> j,vector<jobs>& rq,vector<jobs>& wq,int n) {
+	int i=0,hyperPeriod = calcHyperPeriod(j),timer=0, diff,*highCritJobsExe=(int*)calloc(n,sizeof(int)),k=0;
+	jobs temp;
+	memset(highCritJobsExe, 0, n * sizeof(int));
+	while (timer < hyperPeriod )
+	{
+		if (wq[0].abs_deadline < rq[0].abs_deadline && timer < wq[0].arr_time && wq[0].arr_time < rq[0].rem_ET + timer) {
+			diff = wq[0].arr_time - rq[0].arr_time;
+			rq[0].rem_ET -= diff;
+			if ((k = checkCriticality(rq[0], j, n)) != -1)
+				highCritJobsExe[k] += diff;
+			cout << "Next job selected:";
+			cout << "T" << rq[0].id << "(" << timer << "-" << timer + diff << ")" << endl;
+			timer = timer + diff;
+			//sort_heap(rq.begin(), rq.end(), compareArrTime());
+		}
+		else if (rq[0].abs_deadline < wq[0].abs_deadline && timer==rq[0].arr_time) {
+			temp = rq.front();
+			if ((k = checkCriticality(rq[0], j, n)) != -1)
+				highCritJobsExe[k] += rq[0].rem_ET;
+			if (temp.abs_deadline < timer + temp.rem_ET ) {
+				runningHighCriticalityJobs(n,j, highCritJobsExe);
+				break;
+			}
+			pop_heap(rq.begin(), rq.end());
+			addNewJob(temp, wq, &timer, j);
+			push_heap(wq.begin(), wq.end());
+			cout << "Next job selected: T" << rq[0].id << "(" << timer << "-" << timer + temp.rem_ET << ")" << endl;			
+			timer += temp.rem_ET;
+		}
+		else timer++;
+		while (wq[0].arr_time <= timer) {
+			temp = wq.front();
+			wq.pop_back();
+			rq.push_back({ temp.abs_deadline,temp.id,temp.rem_ET,temp.arr_time });
+		}
+	}
+}
+
+void runningHighCriticalityJobs(int ntasks,vector<tasks> j,int highCritJobsExe[]) {
+	vector<jobs> ready_queue, waiting_queue;                            //assumtion user provides task set in incresing order of their arrival time
+	int system_criticality = 1, temp, timer = j[0].arr_time;
+	cout << "\nSCHEDULE:\n\n";
+	for (int i = 1; i < ntasks; i++) {
+		if (j[i].criticality == 2) {
+			temp = j[i].arr_time + j[i].deadline;
+			if (timer == j[i].arr_time && highCritJobsExe[i]!=0) {
+				ready_queue.push_back({ temp,j[i].id, j[i].wcet[1]-highCritJobsExe[i],j[i].arr_time });
+			}
+			else {
+				waiting_queue.push_back({ temp,j[i].id,j[i].wcet[1]-highCritJobsExe[i],j[i].arr_time });
+			}
+		}
+	}
+
+	/*auto f1 = bind(compareArrTime(), 1, 2);
+	//auto f2 = bind(compareDeadline(), 1, 2);
+	make_heap(ready_queue.begin(), ready_queue.end(), compareArrTime());
+	make_heap(waiting_queue.begin(), waiting_queue.end(), compareDeadline());*/
+	//schedule(j, ready_queue, waiting_queue,ntasks);
+}
+
+void runningPhase(int ntasks,vector<tasks> j) {
+	vector<jobs> ready_queue,waiting_queue;                            //assumtion user provides task set in incresing order of their arrival time
+	int system_criticality = 1, temp, timer = j[0].arr_time;
+	cout << "\nSCHEDULE:\n\n";
+	for (int i = 1; i <ntasks; i++) {
+		if (j[i].criticality == 1) {
+			temp = j[i].arr_time + j[i].deadline;
+			if (timer == j[i].arr_time) {				
+				ready_queue.push_back({ temp,j[i].id, j[i].wcet[0],j[i].arr_time });
+			}
+			else {
+				waiting_queue.push_back({ temp,j[i].id,j[i].wcet[0],j[i].arr_time });
+			}
+		}
+	}
+	buildHeap(ready_queue.size(), ready_queue);
+	/*
+	schedule(j, ready_queue, waiting_queue,ntasks);*/
+	cout << "ready queue";
+	for (int i = 0; i < ready_queue.size(); i++) {
+		cout << ready_queue[i].arr_time << " " << ready_queue[i].id<<endl;
+	}
+}
+
+void buildHeap(int n,vector<jobs>&queue) {
+	int heapSize = n - 1;
+	for (int i = n / 2; i >= 0; i--)
+		maxHeapify(queue,i,&heapSize);
+}
+
+void maxHeapify(vector<jobs>&A, int i,int *heapSize) {
+	int l, r, largest;
+	jobs temp;
+	l = 2 * i + 1;
+	r = 2 * i + 2;
+	if (l <= *heapSize && A[l].arr_time < A[i].arr_time)
+		largest = l;
+	else largest = i;
+	if (r <= *heapSize && A[r].arr_time < A[i].arr_time)
+		largest = r;
+	if (largest != i) {
+		temp = A[largest];
+		A[largest] = A[i];
+		A[i] = temp;
+		maxHeapify(A, largest,heapSize);
+	}	
+}
